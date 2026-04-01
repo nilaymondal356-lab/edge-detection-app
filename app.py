@@ -1,19 +1,30 @@
 """
 Edge Detection Web Application — Flask Backend
 Serves the frontend and provides an image processing API via OpenCV.
+Optimised for deployment on Render free tier (512 MB RAM).
 """
 
 import base64
+import gc
 import io
+import logging
 
 import cv2
 import numpy as np
 from flask import Flask, jsonify, request, send_from_directory
 from PIL import Image
 
+# ── App setup ───────────────────────────────────────────────────────
+
 app = Flask(__name__, static_folder="static", static_url_path="/static")
 
-MAX_DIMENSION = 2000  # px – cap large images for speed
+# Cap very large images to keep memory in check on Render free tier.
+# The optimised Sobel (float32 + in-place) handles 2000px fine within 512 MB.
+MAX_DIMENSION = 2000  # px
+
+# Make sure errors/info show up in Render's log viewer
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 # ── Helpers ─────────────────────────────────────────────────────────
@@ -41,27 +52,43 @@ def encode_image(img: np.ndarray) -> str:
 def apply_canny(img: np.ndarray, low: int, high: int) -> np.ndarray:
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     blurred = cv2.GaussianBlur(gray, (5, 5), 1.4)
-    # Ensure low <= high so both sliders always have an effect
     lo, hi = min(low, high), max(low, high)
     return cv2.Canny(blurred, lo, hi)
 
 
 def apply_sobel(img: np.ndarray, low: int, high: int) -> np.ndarray:
-    """Sobel with double-thresholding: strong edges (>high) are white,
-    weak edges (between low and high) are gray, rest is black."""
+    """Memory-optimised Sobel with double-thresholding.
+
+    Uses CV_32F instead of CV_64F (halves memory) and accumulates
+    magnitude in-place to avoid holding 4+ large arrays at once.
+    """
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     blurred = cv2.GaussianBlur(gray, (5, 5), 1.4)
-    sobel_x = cv2.Sobel(blurred, cv2.CV_64F, 1, 0, ksize=3)
-    sobel_y = cv2.Sobel(blurred, cv2.CV_64F, 0, 1, ksize=3)
-    magnitude = np.sqrt(sobel_x ** 2 + sobel_y ** 2)
-    magnitude = np.uint8(255 * magnitude / magnitude.max()) if magnitude.max() > 0 else np.uint8(magnitude)
+
+    # Use float32 instead of float64 — same visual result, half the RAM
+    sobel_x = cv2.Sobel(blurred, cv2.CV_32F, 1, 0, ksize=3)
+    sobel_y = cv2.Sobel(blurred, cv2.CV_32F, 0, 1, ksize=3)
+
+    # Compute magnitude in-place
+    np.multiply(sobel_x, sobel_x, out=sobel_x)
+    np.multiply(sobel_y, sobel_y, out=sobel_y)
+    np.add(sobel_x, sobel_y, out=sobel_x)  # sobel_x now holds x²+y²
+    del sobel_y                              # free immediately
+    np.sqrt(sobel_x, out=sobel_x)           # sobel_x now holds magnitude
+
+    mag_max = sobel_x.max()
+    if mag_max > 0:
+        np.multiply(sobel_x, 255.0 / mag_max, out=sobel_x)
+
+    magnitude = sobel_x.astype(np.uint8)
+    del sobel_x
+    gc.collect()
 
     lo, hi = min(low, high), max(low, high)
 
-    # Double-threshold: strong edges white, weak edges gray
     edges = np.zeros_like(magnitude)
-    edges[magnitude >= hi] = 255          # strong edges
-    edges[(magnitude >= lo) & (magnitude < hi)] = 128  # weak edges
+    edges[magnitude >= hi] = 255
+    edges[(magnitude >= lo) & (magnitude < hi)] = 128
     return edges
 
 
@@ -88,15 +115,22 @@ def process():
     low = int(data.get("low", 50))
     high = int(data.get("high", 150))
 
+    logger.info("Processing request: algorithm=%s  low=%s  high=%s", algorithm, low, high)
+
     if algorithm not in ALGORITHMS:
         return jsonify({"error": f"Unknown algorithm: {algorithm}"}), 400
 
     try:
         img = decode_image(data["image"])
         edges = ALGORITHMS[algorithm](img, low, high)
+        del img  # free original image immediately
+        gc.collect()
         result_b64 = encode_image(edges)
+        del edges
+        gc.collect()
         return jsonify({"image": result_b64})
     except Exception as exc:
+        logger.exception("Image processing failed")
         return jsonify({"error": str(exc)}), 500
 
 

@@ -17,10 +17,8 @@
   const algoTrigger    = algorithmSel.querySelector(".custom-select-trigger");
   const algoLabel      = algorithmSel.querySelector(".custom-select-label");
   const algoOptions    = algorithmSel.querySelectorAll(".custom-select-option");
-  const lowSlider      = $("#low-slider");
-  const highSlider     = $("#high-slider");
-  const lowValue       = $("#low-value");
-  const highValue      = $("#high-value");
+  const intensitySlider = $("#intensity-slider");
+  const intensityValue  = $("#intensity-value");
   const downloadBtn    = $("#download-btn");
   const newImageBtn    = $("#new-image-btn");
   const themeToggle    = $("#theme-toggle");
@@ -102,8 +100,7 @@
     const body = {
       image:     imageBase64,
       algorithm: algorithmSel.dataset.value,
-      low:       parseInt(lowSlider.value, 10),
-      high:      parseInt(highSlider.value, 10),
+      intensity: parseInt(intensitySlider.value, 10),
     };
 
     try {
@@ -140,13 +137,8 @@
   }
 
   // ── Slider events ─────────────────────────────────────────────
-  lowSlider.addEventListener("input", () => {
-    lowValue.textContent = lowSlider.value;
-    scheduleProcess();
-  });
-
-  highSlider.addEventListener("input", () => {
-    highValue.textContent = highSlider.value;
+  intensitySlider.addEventListener("input", () => {
+    intensityValue.textContent = intensitySlider.value;
     scheduleProcess();
   });
 

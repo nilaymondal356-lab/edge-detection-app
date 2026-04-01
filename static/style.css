@@ -334,6 +334,16 @@ main {
   text-align: right;
 }
 
+.intensity-hint {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+}
+
 /* ── Custom Glass Dropdown ─────────────────────────────────────────── */
 .custom-select {
   position: relative;

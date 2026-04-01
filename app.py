@@ -98,6 +98,21 @@ ALGORITHMS = {
 }
 
 
+def intensity_to_thresholds(intensity: int) -> tuple[int, int]:
+    """Map a 1-100 intensity slider to (low, high) thresholds.
+
+    intensity  1  → very few edges   → high thresholds (low=200, high=250)
+    intensity 50  → balanced          → (low=105, high=155)
+    intensity 100 → maximum detail    → low thresholds  (low=10, high=60)
+    """
+    intensity = max(1, min(100, intensity))
+    # Linear interpolation: intensity 1→100  maps  low 200→10, high 250→60
+    t = (intensity - 1) / 99.0  # normalise to 0..1
+    low  = int(200 - t * 190)   # 200 → 10
+    high = int(250 - t * 190)   # 250 → 60
+    return low, high
+
+
 # ── Routes ──────────────────────────────────────────────────────────
 
 @app.route("/")
@@ -112,10 +127,11 @@ def process():
         return jsonify({"error": "No image provided"}), 400
 
     algorithm = data.get("algorithm", "canny").lower()
-    low = int(data.get("low", 50))
-    high = int(data.get("high", 150))
+    intensity = int(data.get("intensity", 50))
+    low, high = intensity_to_thresholds(intensity)
 
-    logger.info("Processing request: algorithm=%s  low=%s  high=%s", algorithm, low, high)
+    logger.info("Processing: algorithm=%s  intensity=%s  → low=%s high=%s",
+                algorithm, intensity, low, high)
 
     if algorithm not in ALGORITHMS:
         return jsonify({"error": f"Unknown algorithm: {algorithm}"}), 400

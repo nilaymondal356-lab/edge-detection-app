@@ -84,15 +84,16 @@
           </div>
         </div>
 
-        <div class="control-group">
-          <label for="low-slider">Lower Threshold <span id="low-value" class="slider-val">50</span></label>
-          <input type="range" id="low-slider" min="0" max="255" value="50" />
-        </div>
 
         <div class="control-group">
-          <label for="high-slider">Upper Threshold <span id="high-value" class="slider-val">150</span></label>
-          <input type="range" id="high-slider" min="0" max="255" value="150" />
+          <label for="intensity-slider">Edge Intensity <span id="intensity-value" class="slider-val">50</span></label>
+          <input type="range" id="intensity-slider" min="1" max="100" value="50" />
+          <div class="intensity-hint">
+            <span>Fewer edges</span>
+            <span>More detail</span>
+          </div>
         </div>
+
 
         <div class="controls-actions">
           <button id="download-btn" class="btn btn-primary">
